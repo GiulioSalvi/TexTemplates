@@ -43,6 +43,12 @@ local function absolute(filename, base)
     filename = path.join {base, filename}
   end
   filename = path.normalize(filename)
+  -- Older Pandoc versions abort outside Lua's pcall if changing directory
+  -- fails. Probe the full target first so missing or invalid parent paths
+  -- reach include_file's diagnostic with the filename and include chain.
+  local probe = io.open(filename, 'rb')
+  if not probe then return filename end
+  probe:close()
   -- Resolving the containing directory also removes ../ and directory
   -- symlink aliases without invoking a shell or an external interpreter.
   local ok, directory = pcall(system.with_working_directory,

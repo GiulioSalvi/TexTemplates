@@ -184,7 +184,41 @@ class MarkdownIncludeTests(unittest.TestCase):
         self.write("main.md", "!include missing/chapter.md\n")
         result = self.run_pandoc()
         self.assertNotEqual(result.returncode, 0)
+        self.assertIn("include.lua: cannot read included file", result.stderr)
         self.assertIn("missing/chapter.md", result.stderr)
+        self.assertIn("include chain:", result.stderr)
+        self.assertIn("main.md", result.stderr)
+
+    def test_missing_file_in_existing_directory_reports_the_include(self):
+        self.write("main.md", "!include chapters/absent.md\n")
+        (self.project / "chapters").mkdir()
+        result = self.run_pandoc()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("include.lua: cannot read included file", result.stderr)
+        self.assertIn("chapters/absent.md", result.stderr)
+        self.assertIn("include chain:", result.stderr)
+        self.assertIn("main.md", result.stderr)
+
+    def test_regular_file_in_parent_path_reports_the_include(self):
+        self.write("main.md", "!include blocked/chapter.md\n")
+        self.write("blocked", "This is a file, not a directory.\n")
+        result = self.run_pandoc()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("include.lua: cannot read included file", result.stderr)
+        self.assertIn("blocked/chapter.md", result.stderr)
+        self.assertIn("include chain:", result.stderr)
+        self.assertIn("main.md", result.stderr)
+
+    def test_nested_missing_include_reports_its_parent_and_chain(self):
+        self.write("main.md", "!include chapters/one.md\n")
+        self.write("chapters/one.md", "!include missing/two.md\n")
+        result = self.run_pandoc()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("include.lua: cannot read included file", result.stderr)
+        self.assertIn("chapters/missing/two.md", result.stderr)
+        self.assertIn("include chain:", result.stderr)
+        self.assertIn("main.md", result.stderr)
+        self.assertIn("chapters/one.md", result.stderr)
 
     def test_encoded_fragment_links_follow_renamed_unicode_headings(self):
         self.write("main.md", "# Caffè\n\n!include chapter.md\n")
@@ -221,6 +255,19 @@ class MarkdownIncludeTests(unittest.TestCase):
         self.assertIn("one.md", result.stderr)
         self.assertIn("two.md", result.stderr)
         self.assertRegex(result.stderr.lower(), r"cycl|circular|recursive")
+
+    def test_directory_alias_and_parent_segments_still_detect_cycles(self):
+        self.write("main.md", "!include chapters/one.md\n")
+        self.write("chapters/one.md", "!include ../alias/one.md\n")
+        try:
+            (self.project / "alias").symlink_to("chapters", target_is_directory=True)
+        except (OSError, NotImplementedError) as error:
+            self.skipTest(f"Directory symlinks are unavailable: {error}")
+        result = self.run_pandoc()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("include.lua: include cycle:", result.stderr)
+        self.assertIn("main.md", result.stderr)
+        self.assertIn("chapters/one.md", result.stderr)
 
     def test_empty_include_directives_fail_explicitly(self):
         for directive in ("!include", "!include <>", '!include ""'):
