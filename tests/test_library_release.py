@@ -78,6 +78,8 @@ class ReleaseTests(unittest.TestCase):
         (self.parent / "bin" / "generate-pdf.sh").chmod(0o755)
         (self.parent / "README.md").write_text("Library README\n")
         (self.parent / "LICENSE").write_text("GPL-3.0-or-later\n")
+        (self.parent / "filters").mkdir()
+        (self.parent / "filters" / "include.lua").write_text("-- Shared Markdown filter\n")
         shutil.copy2(SCRIPT.parents[1] / ".gitattributes", self.parent / ".gitattributes")
         command(self.parent, "submodule", "add", "https://github.com/TestOwner/Handouts.git", "templates/handouts")
         command(self.parent, "add", ".")
@@ -215,6 +217,7 @@ class ReleaseTests(unittest.TestCase):
         release.safe_extract(Path(first["package_path"]), unpacked)
         tree = unpacked / "tex-templates"
         self.assertTrue((tree / "bin/generate-pdf.sh").is_file())
+        self.assertEqual((tree / "filters/include.lua").read_text(), "-- Shared Markdown filter\n")
         self.assertTrue((tree / "templates/handouts/template.tex").is_file())
         self.assertFalse((tree / "templates/handouts/usage_example").exists())
         self.assertFalse((tree / ".gitattributes").exists())
@@ -227,6 +230,21 @@ class ReleaseTests(unittest.TestCase):
         self.child_releases.clear()
         result = release.assemble(self.parent, self.root / "preview", "0.0.0", preview=True)
         self.assertTrue(json.loads(Path(result["lock_path"]).read_text())["preview"])
+
+    def test_historical_ref_does_not_acquire_current_filters(self):
+        command(self.parent, "rm", "-r", "filters")
+        command(self.parent, "commit", "-m", "Historical library without shared filters")
+        old_commit = command(self.parent, "rev-parse", "HEAD")
+        (self.parent / "filters").mkdir()
+        (self.parent / "filters" / "include.lua").write_text("-- New shared filter\n")
+        command(self.parent, "add", "filters")
+        command(self.parent, "commit", "-m", "Add shared filter")
+        old = self.root / "historical"
+        current = self.root / "current"
+        release.base_tree(self.parent, old, old_commit)
+        release.base_tree(self.parent, current)
+        self.assertFalse((old / "filters").exists())
+        self.assertEqual((current / "filters/include.lua").read_text(), "-- New shared filter\n")
 
     def test_noop_dispatch_still_verifies_payload(self):
         result = release.update(self.parent, self.event("v1.0.0", self.commit, url="https://evil.invalid"))

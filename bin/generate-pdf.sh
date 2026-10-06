@@ -41,6 +41,7 @@ Options:
 The project defaults are discovered in this order: pandoc.yaml, pandoc.yml,
 defaults.yaml, defaults.yml. The selected template's defaults.yaml or
 defaults.yml is loaded first; project settings and Pandoc options follow.
+The library's Markdown !include filter runs before template/project filters.
 
 Template selection: --template, then DIR/.tex-template, then the global
 default reported by template-use.sh --show. The selected template's
@@ -205,12 +206,15 @@ if [ -f "$TEX_TEMPLATE_HOME/environment.sh" ]; then
 fi
 
 command -v pandoc >/dev/null 2>&1 || fail 'Pandoc is not installed or is not on PATH.'
+include_filter=$TEX_TEMPLATES_HOME/filters/include.lua
+[ -f "$include_filter" ] || fail "Library Markdown include filter not found: $include_filter"
 cd "$project_dir"
 mkdir -p build
 log_path=$project_dir/build/pandoc-generation.log
 
 run_pandoc() {
     pandoc \
+        --lua-filter="$include_filter" \
         --defaults="$template_defaults" \
         --defaults="$project_defaults" \
         --template="$TEX_TEMPLATE_PATH" \

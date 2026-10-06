@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'bin/**'
+      - 'filters/**'
       - 'templates/**'
       - 'scripts/**'
       - '.gitmodules'
@@ -50,7 +51,10 @@ jobs:
         with:
           python-version: '3.12'
       - name: Check packaging helpers
-        run: python -m unittest discover -s tests -v
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y pandoc
+          python -m unittest discover -s tests -v
       - name: Validate and stage the released template
         if: github.event_name == 'repository_dispatch'
         id: update

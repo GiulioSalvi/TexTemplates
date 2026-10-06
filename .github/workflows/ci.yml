@@ -24,6 +24,8 @@ jobs:
           python-version: '3.12'
       - name: Check release helper and shell entry points
         run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y pandoc
           python -m unittest discover -s tests -v
           for script in bin/*.sh; do
             sh -n "$script"

@@ -176,6 +176,21 @@ class DockerReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(docker_release.release.ReleaseError, "must cover"):
             self.prepare()
 
+    def test_new_runtime_archive_preserves_shared_filters(self):
+        (self.tree / "filters").mkdir()
+        (self.tree / "filters" / "include.lua").write_text("-- Shared Lua filter\n")
+        self.write_assets()
+        output = self.root / "output"
+        docker_release.prepare("0.1.0", output, PARENT, client=self.client, docker_dir=self.recipe)
+        self.assertEqual((output / "library/filters/include.lua").read_text(), "-- Shared Lua filter\n")
+
+    def test_partial_shared_filter_runtime_is_rejected(self):
+        (self.tree / "filters").mkdir()
+        (self.tree / "filters" / "unrelated.lua").write_text("-- Wrong runtime\n")
+        self.write_assets()
+        with self.assertRaisesRegex(docker_release.release.ReleaseError, "missing filters/include.lua"):
+            self.prepare()
+
     def test_numeric_preview_or_wrong_library_commit_cannot_be_published(self):
         for field, value in (("preview", 0), ("preview", True), ("commit", "c" * 40), ("schema", True)):
             with self.subTest(field=field, value=value):

@@ -92,8 +92,13 @@ def verify_assets(directory: Path, version: str, commit: str) -> tuple[Path, lis
     if json.loads((tree / "templates.lock.json").read_text()) != lock:
         raise release.ReleaseError("Embedded and published release locks differ.")
     allowed = {"bin", "README.md", "LICENSE", "requirements.txt", "templates.lock.json", "templates"}
-    if {item.name for item in tree.iterdir()} != allowed:
+    present = {item.name for item in tree.iterdir()}
+    # Existing published libraries remain usable; newer archives also contain
+    # shared Pandoc filters consumed automatically by generate-pdf.sh.
+    if not allowed.issubset(present) or not present.issubset(allowed | {"filters"}):
         raise release.ReleaseError("The library archive contains unexpected source material.")
+    if "filters" in present and not (tree / "filters" / "include.lua").is_file():
+        raise release.ReleaseError("The library archive is missing filters/include.lua.")
     if {item.name for item in (tree / "templates").iterdir()} != {item["id"] for item in records}:
         raise release.ReleaseError("Installed templates do not match the release lock.")
     for record in records:

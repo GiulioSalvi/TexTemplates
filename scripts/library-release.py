@@ -311,11 +311,18 @@ class GitHub:
 def base_tree(repo: Path, destination: Path, ref: str = "HEAD") -> None:
     # git archive honors the committed .gitattributes. Submodules are expanded
     # separately from verified release assets, never from the source checkout.
-    contents = git(repo, "archive", "--format=tar", ref, "--", "bin", "README.md", "LICENSE", binary=True)
+    paths = ["bin", "README.md", "LICENSE"]
+    # Historical releases/drafts predate shared filters. Export them only when
+    # tracked in the selected commit, never from the current working tree.
+    if git(repo, "ls-tree", "--name-only", ref, "--", "filters"):
+        paths.append("filters")
+    contents = git(repo, "archive", "--format=tar", ref, "--", *paths, binary=True)
     safe_extract(io.BytesIO(contents), destination)
     for name in ("bin", "README.md", "LICENSE"):
         if not (destination / name).exists():
             raise ReleaseError(f"The committed parent distribution is missing {name}.")
+    if "filters" in paths and not (destination / "filters" / "include.lua").is_file():
+        raise ReleaseError("The committed library is missing filters/include.lua.")
 
 
 def aggregate_requirements(tree: Path) -> None:

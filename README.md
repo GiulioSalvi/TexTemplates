@@ -10,7 +10,7 @@ version. See [LICENSE](LICENSE).
 
 ## Build a document locally
 
-Install Pandoc, LuaLaTeX, and the TeX packages required by the selected template.
+Install Pandoc 3.1 or later, LuaLaTeX, and the TeX packages required by the selected template.
 The requirements files use native TeX Live / `tlmgr` package names.
 
 ```sh
@@ -32,6 +32,70 @@ bin/template-use.sh --project "/path/to/course" handouts
 ```
 
 Build logs are saved in the course's `build/pandoc-generation.log`.
+
+## Include Markdown chapters
+
+Keep one master file for each volume and reference its chapters with standalone
+`!include` directives. The shared `filters/include.lua` is loaded automatically
+by `generate-pdf.sh`, before any filters configured by the template or course.
+It expands the included Markdown into Pandoc blocks before the LaTeX writer
+runs. Pandoc provides the Lua interpreter; no separate Lua installation or
+preprocessing script is required.
+
+For example, a course's `volume.md` can contain:
+
+```markdown
+---
+title: Database Systems
+author: Giulio Salvi
+---
+
+\part{Foundations}
+
+!include chapters/01-relational-model.md
+
+!include chapters/02-relational-algebra.md
+```
+
+Point the course defaults at the master file:
+
+```yaml
+input-file: volume.md
+output-file: build/volume.pdf
+```
+
+Then run `generate-pdf.sh --template handouts` as usual.
+
+Paths are relative to the file containing the directive, including nested
+inclusions. Paths containing spaces can be quoted, such as
+`!include "chapters/01 relational model.md"`; `!include <chapter.md>` is also
+accepted. Markdown still parses these lines first: escape Markdown punctuation
+in filenames when necessary, for example `!include \_chapter\_.md`. Put each
+directive on its own line and separate it from surrounding prose with blank
+lines. Consecutive directive-only lines are supported too.
+
+Headings, lists, mathematics, and raw TeX remain Pandoc content. Local Markdown
+images and links in included chapters are resolved against their chapter's
+directory. The master document's metadata remains authoritative; included YAML
+metadata is discarded. Repeated identifiers from different chapters receive
+unique suffixes, and local fragment links within each chapter follow those
+identifiers. Missing files, recursive cycles, ambiguous multiple input
+directories, and excessive nesting produce errors with the include chain.
+Code blocks and inline code examples remain literal.
+
+The filter supports Pandoc's `markdown` reader and its enabled or disabled
+extensions. When calling Pandoc directly, enable it explicitly:
+
+```sh
+pandoc volume.md --from=markdown+raw_tex \
+  --lua-filter="$TEX_TEMPLATES_HOME/filters/include.lua" \
+  --to=latex --output=build/volume.tex
+```
+
+Set `TEX_TEMPLATES_HOME` to the installed library directory for this direct
+command. Shared filters are included in new library archives and therefore in
+Docker images built from those releases. Existing images retain the library
+version with which they were built.
 
 ## Release model
 
@@ -65,7 +129,7 @@ must have corresponding, published template packages.
 
 The library release contains:
 
-- `tex-templates-X.Y.Z.tar.gz`, with `bin/` and expanded `templates/`;
+- `tex-templates-X.Y.Z.tar.gz`, with `bin/`, shared `filters/`, and expanded `templates/`;
 - `templates.lock.json`;
 - `SHA256SUMS`.
 
