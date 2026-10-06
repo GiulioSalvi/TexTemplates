@@ -137,51 +137,6 @@ Template examples, Git metadata, and maintenance workflows are excluded from
 the distributed library. The CI uses examples from the development checkout to
 verify the extracted package.
 
-## GitHub setup
-
-1. Create an empty GitHub repository for the library, using `main` as its default
-   branch. For example, you can name it `TexTemplates`. Publish this local Git
-   repository to it. Leave GitHub's automatic README/license initialization off
-   so the local history can be pushed directly.
-2. In `HandoutsTexTemplate`, open **Settings → Secrets and variables → Actions**.
-   Add the repository variable `LIBRARY_REPOSITORY`, containing the parent's
-   full name, for example `GiulioSalvi/TexTemplates`.
-3. Create a fine-grained personal access token that can access only the library
-   repository and has **Contents: Read and write**. Store it as the Actions
-   secret `LIBRARY_DISPATCH_TOKEN` in `HandoutsTexTemplate`. A GitHub App
-   installation token with equivalent access can be used instead if supplied
-   by a suitable token-generation step.
-4. Enable GitHub Actions in both repositories and allow the pinned official
-   actions used by the workflows. The workflows request their own
-   `contents: write` permission for commits and releases, `actions: write` for
-   dispatching the image workflow, and `packages: write` for GHCR publication.
-   Branch rules must
-   allow the library workflow to record the submodule update on `main`.
-5. Publish the workflow changes in the template repository before creating its
-   first release tag. The parent workflows must already exist on its default
-   branch when the notification arrives.
-
-Once both repositories and the variable/secret are ready, create the first
-template release from the template repository:
-
-```sh
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-Creating the tag starts the workflow; it creates and publishes the GitHub
-release after its package has passed validation. You can also run the template
-release workflow manually for an existing tag to retry publication or resend
-the notification. The library release workflow is likewise available from the
-Actions **Run workflow** button.
-
-Retries skip a library collection that was already published and resume a
-matching interrupted draft from its original source commit and version. Stale
-notifications do not move a selected template back to an older release.
-
-GitHub release immutability is optional. If enabled, assets are attached to a
-draft before it is published. Published assets are not replaced on retry.
-
 ## Build automation locally
 
 Python 3.12+, Git, and authenticated GitHub CLI (`gh`) are used by the library's
@@ -226,54 +181,6 @@ It does not rely on a `release: published` event, because a release created with
 `GITHUB_TOKEN` does not start another workflow through that event. A failed image
 build leaves the published library release available and can be retried
 independently.
-
-### Registry setup
-
-Before publishing an image:
-
-1. On Docker Hub, create the repository **`giuliosalvi485/tex-templates`** with
-   **Public** visibility. The image workflow checks that the repository can be
-   read anonymously before starting the build.
-2. In this parent repository, open **Settings → Secrets and variables → Actions
-   → Variables** and add `DOCKERHUB_USERNAME` with value `giuliosalvi485`.
-   `DOCKERHUB_NAMESPACE` is optional and defaults to that username; set it only
-   when publishing under another account or organization namespace.
-3. In your **Docker account settings → Personal access tokens**, create a Docker
-   PAT with **Read and Write** access. Store it in this parent repository's
-   Actions **Secrets** tab as `DOCKERHUB_TOKEN`. This is a Docker token; the
-   GitHub PAT used by template dispatches cannot authenticate to Docker Hub.
-4. GHCR uses this repository's automatic `GITHUB_TOKEN` with `packages: write`;
-   no additional GitHub PAT is needed. Its first published package normally has
-   **Private** visibility. To make the GHCR copy publicly downloadable too,
-   open your GitHub profile's **Packages → tex-templates → Package settings →
-   Change visibility** and choose **Public** after the first publication.
-
-### Build an existing release or retry an image build
-
-Open **Actions → Build and publish Docker images → Run workflow** on `main`:
-
-- `library_version`: an existing stable library release, such as `v0.1.0` or
-  `0.1.0`;
-- `publish`: leave enabled to publish to both registries; disable it to build
-  and compile both architectures without registry credentials or publication;
-- `image_tag`: leave empty to use the library version, or choose a suffix such
-  as `0.1.0-r1` for a new image recipe based on that same library release.
-
-Version tags are immutable in the publishing helper: retries preserve a
-compatible published tag and reject conflicting library or recipe metadata.
-If publication succeeded in only one registry, a retry completes the other
-using the original platform digests. Existing tags in both registries must
-select identical platform images. A changed Docker recipe needs a fresh suffix
-instead of replacing an existing tag. The workflow publishes explicit version
-tags and does not move a floating `latest` tag.
-
-The workflow's **Run workflow** button is also the way to build the library's
-first release if that release predates the Docker workflow. For local release
-preparation and publishing helper options:
-
-```sh
-python3 scripts/docker-release.py --help
-```
 
 ### Use an image in a course Dev Container
 
