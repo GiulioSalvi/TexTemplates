@@ -23,6 +23,8 @@ on:
 
 permissions:
   contents: write
+  # workflow_dispatch is an explicit cross-workflow trigger even with GITHUB_TOKEN.
+  actions: write
 
 # queue:max preserves pending dispatches instead of replacing older ones.
 concurrency:
@@ -167,3 +169,24 @@ jobs:
         env:
           PUBLISHED_TAG: ${{ steps.published.outputs.published_tag }}
         run: echo "This collection is already published as $PUBLISHED_TAG."
+      - name: Start the separate Docker image workflow
+        env:
+          EXISTING_TAG: ${{ steps.published.outputs.published_tag }}
+          NEW_VERSION: ${{ steps.final.outputs.version }}
+        run: |
+          if [ -n "$EXISTING_TAG" ]; then
+            library_tag="$EXISTING_TAG"
+          else
+            library_tag="v$NEW_VERSION"
+          fi
+          python - "$library_tag" <<'PY' > build/docker-dispatch.json
+          import json
+          import sys
+          print(json.dumps({"ref": "main", "inputs": {
+              "library_version": sys.argv[1], "publish": True,
+          }}))
+          PY
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/docker.yml/dispatches" \
+            --input build/docker-dispatch.json
+          echo "Requested the separate Docker image workflow for $library_tag." >> "$GITHUB_STEP_SUMMARY"

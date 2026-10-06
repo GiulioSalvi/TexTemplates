@@ -46,6 +46,9 @@ Build logs are saved in the course's `build/pandoc-generation.log`.
 4. The same workflow downloads the release packages matching all selected
    submodule commits, verifies them, assembles the complete library, and
    publishes a library release.
+5. After publication, or when the collection is already published, the release
+   workflow explicitly dispatches the separate Docker image workflow for that
+   library version. Image build results appear in their own Actions execution.
 
 The committed submodule references select the versions. `templates.lock.json`
 is generated from that selection and included in each published release. It
@@ -86,7 +89,9 @@ verify the extracted package.
    by a suitable token-generation step.
 4. Enable GitHub Actions in both repositories and allow the pinned official
    actions used by the workflows. The workflows request their own
-   `contents: write` permission for commits and releases. Branch rules must
+   `contents: write` permission for commits and releases, `actions: write` for
+   dispatching the image workflow, and `packages: write` for GHCR publication.
+   Branch rules must
    allow the library workflow to record the submodule update on `main`.
 5. Publish the workflow changes in the template repository before creating its
    first release tag. The parent workflows must already exist on its default
@@ -127,17 +132,108 @@ release, check whether a collection was already published, and publish or
 resume a validated draft. Local tests run
 in temporary repositories and do not publish releases.
 
-## Docker consumers
+## Docker images
 
-A Docker build can consume a chosen `tex-templates-X.Y.Z.tar.gz`, verify it using
-the release checksum, and install its expanded library under
-`/opt/tex-templates`. Set `TEX_TEMPLATES_HOME` to that directory and add its
-`bin/` directory to `PATH`. Install Pandoc and a coherent TeX Live environment
-with the selected templates' requirements.
+The separate **Build and publish Docker images** workflow builds a selected,
+already published library release. It downloads the release archive and lock
+file, verifies their checksums, and prepares the expanded runtime under
+`/opt/tex-templates`. The image includes Pandoc, native TeX Live with the
+library's package requirements, and an unprivileged `vscode` user. The library's
+commands are on `PATH`, and TeX caches live in the user's writable home.
+Pandoc's Lua interpreter is built in; a separate Lua installation is not needed
+for normal Pandoc filters.
 
-This release automation publishes the library archives. A Docker image build
-and registry publication can consume them independently. Pin the library
-release and the toolchain/base-image versions in that Docker build.
+AMD64 and ARM64 images are built on native GitHub runners. Each image compiles
+the templates' examples with its unprivileged account. Example sources come
+from the exact child commits recorded in the release lock; they remain outside
+the image. Only after both architectures pass are the version tags published
+to both registries:
+
+```text
+giuliosalvi485/tex-templates:0.1.0
+ghcr.io/giuliosalvi/tex-templates:0.1.0
+```
+
+Docker Hub hosts the project's public image under the account's namespace.
+
+Library releases and image builds remain separate workflows. The release
+workflow explicitly uses `workflow_dispatch` with its effective published tag.
+It does not rely on a `release: published` event, because a release created with
+`GITHUB_TOKEN` does not start another workflow through that event. A failed image
+build leaves the published library release available and can be retried
+independently.
+
+### Registry setup
+
+Before publishing an image:
+
+1. On Docker Hub, create the repository **`giuliosalvi485/tex-templates`** with
+   **Public** visibility. The image workflow checks that the repository can be
+   read anonymously before starting the build.
+2. In this parent repository, open **Settings → Secrets and variables → Actions
+   → Variables** and add `DOCKERHUB_USERNAME` with value `giuliosalvi485`.
+   `DOCKERHUB_NAMESPACE` is optional and defaults to that username; set it only
+   when publishing under another account or organization namespace.
+3. In your **Docker account settings → Personal access tokens**, create a Docker
+   PAT with **Read and Write** access. Store it in this parent repository's
+   Actions **Secrets** tab as `DOCKERHUB_TOKEN`. This is a Docker token; the
+   GitHub PAT used by template dispatches cannot authenticate to Docker Hub.
+4. GHCR uses this repository's automatic `GITHUB_TOKEN` with `packages: write`;
+   no additional GitHub PAT is needed. Its first published package normally has
+   **Private** visibility. To make the GHCR copy publicly downloadable too,
+   open your GitHub profile's **Packages → tex-templates → Package settings →
+   Change visibility** and choose **Public** after the first publication.
+
+### Build an existing release or retry an image build
+
+Open **Actions → Build and publish Docker images → Run workflow** on `main`:
+
+- `library_version`: an existing stable library release, such as `v0.1.0` or
+  `0.1.0`;
+- `publish`: leave enabled to publish to both registries; disable it to build
+  and compile both architectures without registry credentials or publication;
+- `image_tag`: leave empty to use the library version, or choose a suffix such
+  as `0.1.0-r1` for a new image recipe based on that same library release.
+
+Version tags are immutable in the publishing helper: retries preserve a
+compatible published tag and reject conflicting library or recipe metadata.
+If publication succeeded in only one registry, a retry completes the other
+using the original platform digests. Existing tags in both registries must
+select identical platform images. A changed Docker recipe needs a fresh suffix
+instead of replacing an existing tag. The workflow publishes explicit version
+tags and does not move a floating `latest` tag.
+
+The workflow's **Run workflow** button is also the way to build the library's
+first release if that release predates the Docker workflow. For local release
+preparation and publishing helper options:
+
+```sh
+python3 scripts/docker-release.py --help
+```
+
+### Use an image in a course Dev Container
+
+Create `.devcontainer/devcontainer.json` in the course repository:
+
+```json
+{
+  "name": "University handouts",
+  "image": "giuliosalvi485/tex-templates:0.1.0",
+  "remoteUser": "vscode"
+}
+```
+
+VS Code mounts the course repository in the container. Keep Markdown, course
+defaults, and figures in that repository, then run:
+
+```sh
+generate-pdf.sh --template handouts
+```
+
+Pin the image version in each course. The GHCR reference shown above can be used
+in the same configuration when its package is public or your Docker client is
+authenticated. Courses requiring additional tools can use a Dockerfile based
+on this image.
 
 ## Add another template
 

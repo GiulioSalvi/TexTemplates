@@ -1,0 +1,2 @@
+# Test fixtures are shared between jobs, but never copied into runtime images.
+/fixtures/
