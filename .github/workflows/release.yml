@@ -1,0 +1,169 @@
+name: Publish template library
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bin/**'
+      - 'templates/**'
+      - 'scripts/**'
+      - '.gitmodules'
+      - '.gitattributes'
+      - '.github/workflows/release.yml'
+      - 'README.md'
+      - 'LICENSE'
+  repository_dispatch:
+    types: [template-released]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Optional next library version, X.Y.Z (otherwise increment patch)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+# queue:max preserves pending dispatches instead of replacing older ones.
+concurrency:
+  group: library-publish
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  publish:
+    # Bootstrap creates the repository without requiring unpublished children.
+    if: github.event_name != 'push' || github.event.before != '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Check packaging helpers
+        run: python -m unittest discover -s tests -v
+      - name: Validate and stage the released template
+        if: github.event_name == 'repository_dispatch'
+        id: update
+        run: python scripts/library-release.py update --event "$GITHUB_EVENT_PATH" --github-output "$GITHUB_OUTPUT"
+      - name: Commit the selected gitlink
+        if: steps.update.outputs.changed == 'true'
+        env:
+          TEMPLATE_ID: ${{ steps.update.outputs.template }}
+          TEMPLATE_TAG: ${{ steps.update.outputs.tag }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "Update $TEMPLATE_ID to $TEMPLATE_TAG"
+          git push origin HEAD:main
+      - name: Choose the next library version
+        id: version
+        run: |
+          git fetch --tags origin
+          version=$(python scripts/library-release.py next-version)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Assemble verified child release assets
+        id: assemble
+        env:
+          LIBRARY_VERSION: ${{ steps.version.outputs.version }}
+        run: python scripts/library-release.py assemble --version "$LIBRARY_VERSION" --output build/release --github-output "$GITHUB_OUTPUT"
+      - name: Check whether this collection was already published
+        id: published
+        env:
+          LOCK_PATH: ${{ steps.assemble.outputs.lock_path }}
+        run: python scripts/library-release.py published --lock "$LOCK_PATH" --github-output "$GITHUB_OUTPUT"
+      - name: Finalize the version or resume an interrupted draft
+        if: steps.published.outputs.already_published != 'true'
+        id: final
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          PROVISIONAL_VERSION: ${{ steps.version.outputs.version }}
+          DRAFT_VERSION: ${{ steps.published.outputs.draft_version }}
+          DRAFT_COMMIT: ${{ steps.published.outputs.draft_commit }}
+          ARCHIVE_PATH: ${{ steps.assemble.outputs.package_path }}
+          LOCK_PATH: ${{ steps.assemble.outputs.lock_path }}
+          CHECKSUMS_PATH: ${{ steps.assemble.outputs.checksums_path }}
+        run: |
+          if [ -n "$DRAFT_VERSION" ]; then
+            if [ -n "$REQUESTED_VERSION" ] && [ "${REQUESTED_VERSION#v}" != "$DRAFT_VERSION" ]; then
+              echo "This collection has draft v$DRAFT_VERSION; resume it before choosing another version." >&2
+              exit 1
+            fi
+            python scripts/library-release.py assemble --version "$DRAFT_VERSION" \
+              --source-commit "$DRAFT_COMMIT" --output build/release-final --github-output "$GITHUB_OUTPUT"
+          elif [ -n "$REQUESTED_VERSION" ]; then
+            version=$(python scripts/library-release.py next-version --override "$REQUESTED_VERSION")
+            python scripts/library-release.py assemble --version "$version" \
+              --output build/release-final --github-output "$GITHUB_OUTPUT"
+          else
+            echo "version=$PROVISIONAL_VERSION" >> "$GITHUB_OUTPUT"
+            echo "package_path=$ARCHIVE_PATH" >> "$GITHUB_OUTPUT"
+            echo "lock_path=$LOCK_PATH" >> "$GITHUB_OUTPUT"
+            echo "checksums_path=$CHECKSUMS_PATH" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install the examples' TeX environment
+        if: steps.published.outputs.already_published != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            pandoc latexmk texlive-luatex texlive-latex-extra \
+            texlive-fonts-extra texlive-science texlive-lang-english texlive-lang-italian
+      - name: Test examples against the assembled release
+        if: steps.published.outputs.already_published != 'true'
+        env:
+          ARCHIVE_PATH: ${{ steps.final.outputs.package_path }}
+        run: |
+          mkdir -p build/distribution build/fixtures
+          tar -xzf "$ARCHIVE_PATH" -C build/distribution
+          export TEX_TEMPLATES_HOME="$PWD/build/distribution/tex-templates"
+          export TEX_TEMPLATES_CONFIG_HOME="$RUNNER_TEMP/template-selection-release"
+          "$TEX_TEMPLATES_HOME/bin/template-list.sh"
+          for template in "$TEX_TEMPLATES_HOME"/templates/*; do
+            id=$(basename "$template")
+            source_fixture="templates/$id/usage_example"
+            if [ ! -d "$source_fixture" ]; then
+              echo "Missing source example for template $id" >&2
+              exit 1
+            fi
+            fixture="$PWD/build/fixtures/$id/usage_example"
+            mkdir -p "$fixture"
+            cp -R "$source_fixture/." "$fixture/"
+            smoke_pdf="$fixture/build/smoke.pdf"
+            rm -f "$smoke_pdf"
+            "$TEX_TEMPLATES_HOME/bin/generate-pdf.sh" --project "$fixture" --template "$id" -- -o "$smoke_pdf"
+            test -s "$smoke_pdf"
+          done
+      - name: Publish the complete library
+        if: steps.published.outputs.already_published != 'true'
+        env:
+          LIBRARY_VERSION: ${{ steps.final.outputs.version }}
+          ARCHIVE_PATH: ${{ steps.final.outputs.package_path }}
+          LOCK_PATH: ${{ steps.final.outputs.lock_path }}
+          CHECKSUMS_PATH: ${{ steps.final.outputs.checksums_path }}
+          MATCHING_DRAFT_TAG: ${{ steps.published.outputs.draft_tag }}
+        run: |
+          python - <<'PY' > build/release/notes.md
+          import json
+          import os
+          from pathlib import Path
+          lock = json.loads(Path(os.environ['LOCK_PATH']).read_text())
+          print('Complete template library, assembled from verified child release assets.\n')
+          for template in lock['templates']:
+              print(f"- {template['id']}: {template['repository']}@{template['tag']} ({template['commit']})")
+          print(f"\nCollection fingerprint: `{lock['fingerprint']}`")
+          PY
+          python scripts/library-release.py publish --lock "$LOCK_PATH" \
+            --package "$ARCHIVE_PATH" --checksums "$CHECKSUMS_PATH" \
+            --notes build/release/notes.md --draft-tag "$MATCHING_DRAFT_TAG"
+      - name: Report an already published collection
+        if: steps.published.outputs.already_published == 'true'
+        env:
+          PUBLISHED_TAG: ${{ steps.published.outputs.published_tag }}
+        run: echo "This collection is already published as $PUBLISHED_TAG."

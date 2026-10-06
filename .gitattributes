@@ -1,0 +1,8 @@
+# The runtime distribution is assembled from the parent and template releases.
+/.gitignore export-ignore
+/.gitattributes export-ignore
+/.gitmodules export-ignore
+/.github export-ignore
+/scripts export-ignore
+/tests export-ignore
+/templates export-ignore

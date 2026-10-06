@@ -1,0 +1,60 @@
+name: Library checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Check release helper and shell entry points
+        run: |
+          python -m unittest discover -s tests -v
+          for script in bin/*.sh; do
+            sh -n "$script"
+          done
+      - name: Assemble a source preview without release credentials
+        run: python scripts/library-release.py preview --output build/preview
+      - name: Install the example's TeX environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            pandoc latexmk texlive-luatex texlive-latex-extra \
+            texlive-fonts-extra texlive-science texlive-lang-english texlive-lang-italian
+      - name: Compile source fixtures using the extracted distribution
+        run: |
+          mkdir -p build/distribution build/fixtures
+          tar -xzf build/preview/tex-templates-0.0.0.tar.gz -C build/distribution
+          export TEX_TEMPLATES_HOME="$PWD/build/distribution/tex-templates"
+          export TEX_TEMPLATES_CONFIG_HOME="$RUNNER_TEMP/template-selection-ci"
+          "$TEX_TEMPLATES_HOME/bin/template-list.sh"
+          for template in "$TEX_TEMPLATES_HOME"/templates/*; do
+            id=$(basename "$template")
+            source_fixture="templates/$id/usage_example"
+            if [ ! -d "$source_fixture" ]; then
+              echo "Missing source example for template $id" >&2
+              exit 1
+            fi
+            fixture="$PWD/build/fixtures/$id/usage_example"
+            mkdir -p "$fixture"
+            cp -R "$source_fixture/." "$fixture/"
+            smoke_pdf="$fixture/build/smoke.pdf"
+            rm -f "$smoke_pdf"
+            "$TEX_TEMPLATES_HOME/bin/generate-pdf.sh" --project "$fixture" --template "$id" -- -o "$smoke_pdf"
+            test -s "$smoke_pdf"
+          done
