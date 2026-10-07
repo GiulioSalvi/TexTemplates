@@ -6,4 +6,5 @@
 /scripts export-ignore
 /tests export-ignore
 /docker export-ignore
+/release-series export-ignore
 /templates export-ignore

@@ -40,6 +40,7 @@ ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*\Z")
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 VERSION = re.compile(r"v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
+SERIES = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
 PACKAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 
 
@@ -478,6 +479,18 @@ def update(repo: Path, event_path: Path) -> dict:
     return result
 
 
+def release_series(repo: Path) -> tuple[int, int] | None:
+    # Use the selected commit, just as assembly does. Working-tree edits and
+    # untracked files must not change the version of a committed collection.
+    if not git(repo, "ls-tree", "--name-only", "HEAD", "--", "release-series"):
+        return None
+    value = git(repo, "show", "HEAD:release-series")
+    match = SERIES.fullmatch(value)
+    if not match:
+        raise ReleaseError(f"Invalid release-series {value!r}; expected X.Y with no leading zeros.")
+    return tuple(int(part) for part in match.groups())
+
+
 def next_version(repo: Path, override: str | None) -> str:
     existing = [version(tag) for tag in git(repo, "tag", "--list").splitlines() if VERSION.fullmatch(tag)]
     highest = max(existing) if existing else None
@@ -485,10 +498,18 @@ def next_version(repo: Path, override: str | None) -> str:
         chosen = version(override)
         if highest and chosen <= highest:
             raise ReleaseError(f"Version must be greater than {version_text(highest)}.")
-    elif highest:
-        chosen = (highest[0], highest[1], highest[2] + 1)
     else:
-        chosen = (0, 1, 0)
+        selected = release_series(repo)
+        if selected is not None and highest and selected < highest[:2]:
+            raise ReleaseError(f"Configured release-series {selected[0]}.{selected[1]} is older than "
+                               f"the highest tagged series {highest[0]}.{highest[1]}.")
+        if selected is not None and (highest is None or selected > highest[:2]):
+            chosen = (*selected, 0)
+        elif highest:
+            chosen = (highest[0], highest[1], highest[2] + 1)
+        else:
+            # Historical source checkouts have no release-series file.
+            chosen = (0, 1, 0)
     return version_text(chosen)
 
 
@@ -590,7 +611,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, default=Path.cwd(), help="Parent Git checkout (default: cwd).")
     commands = parser.add_subparsers(dest="command", required=True)
-    choose = commands.add_parser("next-version", help="Choose initial 0.1.0 or increment the highest version's patch.")
+    choose = commands.add_parser("next-version", help="Start the committed release-series or increment its patch; historical checkouts retain automatic versioning.")
     choose.add_argument("--override", help="Explicit version, strictly newer than all existing SemVer tags.")
     refresh = commands.add_parser("update", help="Validate a template-released event and stage its exact gitlink.")
     refresh.add_argument("--event", type=Path, required=True)

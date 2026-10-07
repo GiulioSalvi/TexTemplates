@@ -118,9 +118,38 @@ The committed submodule references select the versions. `templates.lock.json`
 is generated from that selection and included in each published release. It
 records the exact template versions, repositories, commits, and archive hashes.
 
-The library uses stable three-part versions. Its first automatic version is
-`v0.1.0`; subsequent automatic releases increment the patch version. A manual
-workflow run can choose a greater version for a minor or major change.
+The library uses stable three-part versions. The committed `release-series`
+file selects the major and minor numbers; its current value is:
+
+```text
+0.2
+```
+
+When the selected series is greater than the highest existing library tag's
+series, the next changed collection starts at patch zero: `0.2` selects
+`v0.2.0`. Later changed collections become `v0.2.1`, `v0.2.2`, and so on.
+Set the file to `0.3` for the next minor series or `1.0` for a major series.
+Use exactly `X.Y`, without a `v` prefix, a patch number, or leading zeros.
+Selecting a series older than the highest tagged series is rejected.
+
+Commit and push the file to make the selection available to GitHub Actions.
+The helper reads it from `HEAD`; uncommitted edits are ignored. Changing only
+this file does not trigger publication, and it is excluded from distributed
+archives and the collection fingerprint. The next changed runtime collection
+or template update uses the selected series. To reserve a series for a set of
+unfinished changes, keep the file and those changes on a development branch
+until they are merged into `main`.
+
+The workflow creates each release tag on the published source commit. Do not
+create a tag to announce a future version: existing tags are treated as used
+versions. Historical checkouts without `release-series` retain the previous
+policy: start at `v0.1.0`, then increment the highest tag's patch.
+
+A manual workflow run can still specify a full `version` greater than all
+existing library tags. That explicit override takes precedence over the file;
+when choosing a new series this way, also update `release-series` for future
+automatic releases. An unchanged collection reuses its published release,
+and a matching interrupted draft retains its original version and commit.
 
 Updating submodules manually and pushing to `main` also starts publication.
 The first push that creates `main` only bootstraps the repository; publication

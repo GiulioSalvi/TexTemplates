@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Optional next library version, X.Y.Z (otherwise increment patch)'
+        description: 'Optional full version, X.Y.Z (otherwise use release-series and automatic patch)'
         required: false
         type: string
 
@@ -69,17 +69,13 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m "Update $TEMPLATE_ID to $TEMPLATE_TAG"
           git push origin HEAD:main
-      - name: Choose the next library version
-        id: version
-        run: |
-          git fetch --tags origin
-          version=$(python scripts/library-release.py next-version)
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Fetch library version tags
+        run: git fetch --tags origin
       - name: Assemble verified child release assets
         id: assemble
-        env:
-          LIBRARY_VERSION: ${{ steps.version.outputs.version }}
-        run: python scripts/library-release.py assemble --version "$LIBRARY_VERSION" --output build/release --github-output "$GITHUB_OUTPUT"
+        # This provisional package is only used to identify the collection.
+        # Choose its actual version after duplicate and interrupted-draft checks.
+        run: python scripts/library-release.py assemble --version 0.0.0 --output build/release --github-output "$GITHUB_OUTPUT"
       - name: Check whether this collection was already published
         id: published
         env:
@@ -90,12 +86,8 @@ jobs:
         id: final
         env:
           REQUESTED_VERSION: ${{ inputs.version }}
-          PROVISIONAL_VERSION: ${{ steps.version.outputs.version }}
           DRAFT_VERSION: ${{ steps.published.outputs.draft_version }}
           DRAFT_COMMIT: ${{ steps.published.outputs.draft_commit }}
-          ARCHIVE_PATH: ${{ steps.assemble.outputs.package_path }}
-          LOCK_PATH: ${{ steps.assemble.outputs.lock_path }}
-          CHECKSUMS_PATH: ${{ steps.assemble.outputs.checksums_path }}
         run: |
           if [ -n "$DRAFT_VERSION" ]; then
             if [ -n "$REQUESTED_VERSION" ] && [ "${REQUESTED_VERSION#v}" != "$DRAFT_VERSION" ]; then
@@ -104,15 +96,14 @@ jobs:
             fi
             python scripts/library-release.py assemble --version "$DRAFT_VERSION" \
               --source-commit "$DRAFT_COMMIT" --output build/release-final --github-output "$GITHUB_OUTPUT"
-          elif [ -n "$REQUESTED_VERSION" ]; then
-            version=$(python scripts/library-release.py next-version --override "$REQUESTED_VERSION")
+          else
+            if [ -n "$REQUESTED_VERSION" ]; then
+              version=$(python scripts/library-release.py next-version --override "$REQUESTED_VERSION")
+            else
+              version=$(python scripts/library-release.py next-version)
+            fi
             python scripts/library-release.py assemble --version "$version" \
               --output build/release-final --github-output "$GITHUB_OUTPUT"
-          else
-            echo "version=$PROVISIONAL_VERSION" >> "$GITHUB_OUTPUT"
-            echo "package_path=$ARCHIVE_PATH" >> "$GITHUB_OUTPUT"
-            echo "lock_path=$LOCK_PATH" >> "$GITHUB_OUTPUT"
-            echo "checksums_path=$CHECKSUMS_PATH" >> "$GITHUB_OUTPUT"
           fi
       - name: Install the examples' TeX environment
         if: steps.published.outputs.already_published != 'true'

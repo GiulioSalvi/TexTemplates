@@ -129,6 +129,11 @@ class ReleaseTests(unittest.TestCase):
         command(repo, "config", "commit.gpgsign", "false")
         command(repo, "config", "core.hooksPath", "/dev/null")
 
+    def commit_series(self, value):
+        (self.parent / "release-series").write_text(value + "\n")
+        command(self.parent, "add", "release-series")
+        command(self.parent, "commit", "-m", "Select release series")
+
     def add_release(self, tag, commit, archive_bytes=None):
         folder = self.root / "assets" / tag
         folder.mkdir(parents=True)
@@ -208,6 +213,106 @@ class ReleaseTests(unittest.TestCase):
         selected = release.templates(self.parent)
         self.assertEqual(selected[0].repository, "TestOwner/Handouts")
         self.assertEqual(selected[0].commit, self.commit)
+
+    def test_initial_configured_series_starts_at_patch_zero(self):
+        for series in ("0.2", "1.0", "10.20"):
+            with self.subTest(series=series):
+                self.commit_series(series)
+                self.assertEqual(release.next_version(self.parent, None), f"{series}.0")
+
+    def test_configured_series_increments_patch_and_resets_on_advance(self):
+        command(self.parent, "tag", "v0.1.9")
+        self.commit_series("0.2")
+        self.assertEqual(release.next_version(self.parent, None), "0.2.0")
+        command(self.parent, "tag", "v0.2.4")
+        self.assertEqual(release.next_version(self.parent, None), "0.2.5")
+        self.commit_series("0.3")
+        self.assertEqual(release.next_version(self.parent, None), "0.3.0")
+        command(self.parent, "tag", "v0.3.2")
+        self.assertEqual(release.next_version(self.parent, None), "0.3.3")
+        self.commit_series("1.0")
+        self.assertEqual(release.next_version(self.parent, None), "1.0.0")
+
+    def test_configured_series_cannot_move_backwards(self):
+        command(self.parent, "tag", "v1.2.3")
+        for series in ("1.1", "0.9"):
+            with self.subTest(series=series):
+                self.commit_series(series)
+                with self.assertRaisesRegex(release.ReleaseError, "older"):
+                    release.next_version(self.parent, None)
+
+    def test_committed_series_requires_plain_major_minor(self):
+        for series in ("", "v0.2", "00.2", "0.02", "0", "0.2.0", "-1.2",
+                       "0.2 # next release", "0.2\n1.0"):
+            with self.subTest(series=series):
+                self.commit_series(series)
+                with self.assertRaises(release.ReleaseError):
+                    release.next_version(self.parent, None)
+
+    def test_series_ignores_untracked_and_uncommitted_working_tree(self):
+        config = self.parent / "release-series"
+        config.write_text("9.9\n")
+        self.assertEqual(release.next_version(self.parent, None), "0.1.0")
+        command(self.parent, "tag", "v0.4.8")
+        self.assertEqual(release.next_version(self.parent, None), "0.4.9")
+        self.commit_series("0.4")
+        config.write_text("invalid working-tree series\n")
+        self.assertEqual(release.next_version(self.parent, None), "0.4.9")
+        command(self.parent, "add", "release-series")
+        self.assertEqual(release.next_version(self.parent, None), "0.4.9")
+        config.unlink()
+        self.assertEqual(release.next_version(self.parent, None), "0.4.9")
+
+    def test_full_override_bypasses_series_but_requires_a_newer_version(self):
+        command(self.parent, "tag", "v0.4.8")
+        for series in ("0.1", "invalid", "9.9"):
+            with self.subTest(series=series):
+                self.commit_series(series)
+                self.assertEqual(release.next_version(self.parent, "v1.0.0"), "1.0.0")
+                for override in ("0.4.8", "0.4.7", "01.0.0", "1.0"):
+                    with self.subTest(override=override), self.assertRaises(release.ReleaseError):
+                        release.next_version(self.parent, override)
+
+    def test_series_only_commit_keeps_fingerprint_and_is_omitted_from_archives(self):
+        first = release.assemble(self.parent, self.root / "before-series", "0.1.0")
+        self.commit_series("0.2")
+        second = release.assemble(self.parent, self.root / "after-series", "0.0.0")
+        self.assertEqual(first["fingerprint"], second["fingerprint"])
+        with tarfile.open(second["package_path"]) as archive:
+            self.assertNotIn("tex-templates/release-series", archive.getnames())
+        source = io.BytesIO(release.git(self.parent, "archive", "--format=tar", "HEAD", binary=True))
+        with tarfile.open(fileobj=source) as archive:
+            self.assertNotIn("release-series", archive.getnames())
+
+    def test_series_only_commit_reuses_existing_published_collection(self):
+        first = release.assemble(self.parent, self.root / "published-series", "0.1.0")
+        lock = json.loads(Path(first["lock_path"]).read_text())
+        self.add_parent_release(lock)
+        command(self.parent, "tag", "v0.1.0")
+        self.commit_series("0.2")
+        provisional = release.assemble(self.parent, self.root / "provisional-series", "0.0.0")
+        with patch.dict(os.environ, {"GITHUB_REPOSITORY": "TestOwner/Library"}):
+            published = release.published(self.parent, Path(provisional["lock_path"]))
+        self.assertTrue(published["already_published"])
+        self.assertEqual(published["published_tag"], "v0.1.0")
+        self.assertEqual(release.next_version(self.parent, None), "0.2.0")
+
+    def test_series_advance_resumes_original_draft_version_and_commit(self):
+        first = release.assemble(self.parent, self.root / "draft-series", "0.1.0")
+        lock = json.loads(Path(first["lock_path"]).read_text())
+        self.add_parent_release(lock, draft=True)
+        self.commit_series("0.2")
+        self.assertEqual(release.next_version(self.parent, None), "0.2.0")
+        provisional = release.assemble(self.parent, self.root / "draft-provisional", "0.0.0")
+        with patch.dict(os.environ, {"GITHUB_REPOSITORY": "TestOwner/Library"}):
+            pending = release.published(self.parent, Path(provisional["lock_path"]))
+        self.assertFalse(pending["already_published"])
+        self.assertEqual(pending["draft_tag"], "v0.1.0")
+        self.assertEqual(pending["draft_version"], "0.1.0")
+        self.assertEqual(pending["draft_commit"], lock["commit"])
+        resumed = release.assemble(self.parent, self.root / "draft-resumed", pending["draft_version"],
+                                   source_commit=pending["draft_commit"])
+        self.assertEqual(Path(first["package_path"]).read_bytes(), Path(resumed["package_path"]).read_bytes())
 
     def test_archive_is_deterministic_complete_and_curated(self):
         first = release.assemble(self.parent, self.root / "one", "0.1.0")
