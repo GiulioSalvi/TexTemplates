@@ -1,3 +1,6 @@
 [submodule "templates/handouts"]
 	path = templates/handouts
 	url = https://github.com/GiulioSalvi/HandoutsTexTemplate.git
+[submodule "templates/slides"]
+	path = templates/slides
+	url = https://github.com/GiulioSalvi/SlidesTexTemplate.git

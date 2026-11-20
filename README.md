@@ -8,6 +8,27 @@ templates expanded from their own release packages.
 The library is licensed under GNU GPL version 3 or, at your option, any later
 version. See [LICENSE](LICENSE).
 
+## Available templates
+
+| ID | Purpose | Source repository |
+| --- | --- | --- |
+| `handouts` | Book-style university handouts | [HandoutsTexTemplate](https://github.com/GiulioSalvi/HandoutsTexTemplate) |
+| `slides` | Beamer presentations with progressive reveals | [SlidesTexTemplate](https://github.com/GiulioSalvi/SlidesTexTemplate) |
+
+The `slides` template provides a cover, default title bands and footers,
+project-specific colours and native PDF transitions. It counts logical frames
+independently from the physical PDF pages produced by Beamer overlays.
+
+```sh
+bin/generate-pdf.sh --project templates/slides/usage_example --template slides
+```
+
+See the template's README and `usage_example/metadata.yml` for cover fields,
+palette options and overlay syntax. Source examples are excluded from runtime
+release archives. A Docker image contains `slides` only after it is built from
+a library release that includes that template; older images retain their
+original collection.
+
 ## Build a document locally
 
 Install Pandoc 3.1 or later, LuaLaTeX, and the TeX packages required by the selected template.
