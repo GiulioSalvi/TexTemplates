@@ -43,6 +43,20 @@ jobs:
           sudo apt-get install --no-install-recommends -y \
             pandoc latexmk texlive-luatex texlive-latex-extra \
             texlive-fonts-extra texlive-science texlive-lang-english texlive-lang-italian poppler-utils
+      - name: Use the image's Pandoc version for PDF integration checks
+        run: |
+          pandoc_version=$(sed -n 's/^ARG PANDOC_VERSION=//p' docker/Dockerfile)
+          pandoc_sha=$(sed -n 's/^ARG PANDOC_SHA256_AMD64=//p' docker/Dockerfile)
+          pandoc_archive="$RUNNER_TEMP/pandoc.tar.gz"
+          pandoc_install="$RUNNER_TEMP/pandoc-image-version"
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/jgm/pandoc/releases/download/$pandoc_version/pandoc-$pandoc_version-linux-amd64.tar.gz" \
+            -o "$pandoc_archive"
+          printf '%s  %s\n' "$pandoc_sha" "$pandoc_archive" | sha256sum --check -
+          mkdir -p "$pandoc_install"
+          tar -xzf "$pandoc_archive" -C "$pandoc_install" --strip-components=1
+          echo "$pandoc_install/bin" >> "$GITHUB_PATH"
+          "$pandoc_install/bin/pandoc" --version
       - name: Compile source fixtures using the extracted distribution
         run: |
           mkdir -p build/distribution build/fixtures
