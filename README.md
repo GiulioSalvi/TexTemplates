@@ -263,3 +263,47 @@ GitHub HTTPS URL. The repository must publish packages using the same metadata
 contract as `handouts`, with its own ID and repository name. Configure its
 `LIBRARY_REPOSITORY` variable and `LIBRARY_DISPATCH_TOKEN` secret to notify this
 library after a stable release is ready.
+
+## Shared TeX components
+
+The library now distinguishes document templates (`templates/handouts`, `templates/slides`) from reusable components (`components/boxes`). Components are parent-owned runtime sources and are versioned with each library release. They are included in the expanded release archive and in the Docker image, alongside their combined TeX Live requirements.
+
+`components/boxes` provides all semantic boxes previously owned by `handouts`, plus `\TransparentBox[image]{Title}{Body}`. The library launcher automatically loads it when these commands appear in Markdown's raw TeX. It works with both document templates. See [the component documentation](components/boxes/README.md).
+
+## Inline Mermaid diagrams
+
+Write diagrams directly in Markdown:
+
+````markdown
+## Architecture
+
+```mermaid
+flowchart LR
+    client[Client] --> server[Server]
+```
+````
+
+`generate-pdf.sh` expands Markdown includes, loads required shared components, renders Mermaid, then runs template/project filters. Mermaid PDFs are cached under the project's `build/mermaid/`. Source edits, local image contents, renderer configuration and the dependency lock invalidate the cache. Other code blocks are preserved.
+
+HTML image paths (`src="assets/image.png"`) and native Mermaid image nodes (`img: "assets/image.png"`) resolve from the project root, or from the including file's directory for diagrams brought in by `!include`. Local assets are embedded for rendering, so published diagrams do not depend on the renderer's working directory. The supported output writers are Beamer and LaTeX.
+
+The library's Docker image installs Node.js, the locked Mermaid CLI and a native Chromium renderer for both supported architectures. The launcher also uses Python 3 (standard library only). An unpacked library on a machine with Node.js 20 or later can install its renderer with:
+
+```sh
+/path/to/tex-templates/bin/setup-mermaid.sh
+```
+
+The default user installation lives in `~/.local/share/tex-templates/mermaid`. Set `TEX_TEMPLATES_MERMAID_HOME` to choose another installed runtime. Renderer tooling is maintained under `tools/mermaid`; no project-local filter or Node dependency directory is required.
+
+## Languages and section cards
+
+Use standard Pandoc metadata, for example `lang: it` or `lang: en`, to select Babel's figure/table caption names. Both templates reapply the selected language after their supporting packages initialize. Without an explicit language, `handouts` keeps Italian and `slides` keeps English. Regional language codes such as `it-IT` and `en-GB` are supported. An explicitly supplied `babel-lang` overrides the language inferred from `lang`; normally set only `lang`. The reader extension `-implicit_figures` disables automatic image captions, independently of their language.
+
+For `slides`, optional automatic section cards are configured independently from their numeric label:
+
+```yaml
+section-pages: true
+section-page-label: false
+```
+
+`section-page-label: false` leaves only the section title. With this field absent or true, Beamer's native section label is retained. The setting also applies when a project calls `\sectionpage` itself.

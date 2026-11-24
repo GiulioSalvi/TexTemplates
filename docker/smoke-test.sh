@@ -97,5 +97,25 @@ if [[ "$tested" -eq 0 ]]; then
     printf 'The runtime image contains no templates to test.\n' >&2
     exit 1
 fi
+if [[ -f "$TEX_TEMPLATES_HOME/filters/mermaid.py" ]]; then
+    project="$workspace/mermaid"
+    mkdir -p "$project"
+    cat > "$project/defaults.yaml" <<'YAML'
+from: markdown+raw_tex
+input-file: diagram.md
+output-file: build/diagram.pdf
+YAML
+    cat > "$project/diagram.md" <<'MD'
+## Offline Mermaid
+
+```mermaid
+flowchart LR
+    source[Source] --> output[PDF]
+```
+MD
+    generate-pdf.sh --project "$project" --template slides
+    test -s "$project/build/diagram.pdf"
+    echo 'Compiled inline Mermaid with the non-root runtime account and no network.'
+fi
 printf 'Compiled %s template(s) with the non-root runtime account and no network.\n' "$tested"
 SH

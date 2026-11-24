@@ -30,6 +30,11 @@ jobs:
           for script in bin/*.sh; do
             sh -n "$script"
           done
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Install the shared Mermaid renderer
+        run: bin/setup-mermaid.sh
       - name: Assemble a source preview without release credentials
         run: python scripts/library-release.py preview --output build/preview
       - name: Install the example's TeX environment
@@ -37,7 +42,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             pandoc latexmk texlive-luatex texlive-latex-extra \
-            texlive-fonts-extra texlive-science texlive-lang-english texlive-lang-italian
+            texlive-fonts-extra texlive-science texlive-lang-english texlive-lang-italian poppler-utils
       - name: Compile source fixtures using the extracted distribution
         run: |
           mkdir -p build/distribution build/fixtures
@@ -60,3 +65,7 @@ jobs:
             "$TEX_TEMPLATES_HOME/bin/generate-pdf.sh" --project "$fixture" --template "$id" -- -o "$smoke_pdf"
             test -s "$smoke_pdf"
           done
+      - name: Check shared boxes, localized captions, section cards and Mermaid
+        env:
+          TEX_TEMPLATES_HOME: ${{ github.workspace }}/build/distribution/tex-templates
+        run: python tests/check_template_features.py

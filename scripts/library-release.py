@@ -315,8 +315,9 @@ def base_tree(repo: Path, destination: Path, ref: str = "HEAD") -> None:
     paths = ["bin", "README.md", "LICENSE"]
     # Historical releases/drafts predate shared filters. Export them only when
     # tracked in the selected commit, never from the current working tree.
-    if git(repo, "ls-tree", "--name-only", ref, "--", "filters"):
-        paths.append("filters")
+    for directory in ("filters", "components", "tools"):
+        if git(repo, "ls-tree", "--name-only", ref, "--", directory):
+            paths.append(directory)
     contents = git(repo, "archive", "--format=tar", ref, "--", *paths, binary=True)
     safe_extract(io.BytesIO(contents), destination)
     for name in ("bin", "README.md", "LICENSE"):
@@ -328,7 +329,9 @@ def base_tree(repo: Path, destination: Path, ref: str = "HEAD") -> None:
 
 def aggregate_requirements(tree: Path) -> None:
     packages = set()
-    for path in sorted((tree / "templates").glob("*/requirements.txt")):
+    requirements = list((tree / "templates").glob("*/requirements.txt"))
+    requirements += list((tree / "components").glob("*/requirements.txt"))
+    for path in sorted(requirements):
         for line in path.read_text().splitlines():
             value = line.partition("#")[0].strip()
             if not value:

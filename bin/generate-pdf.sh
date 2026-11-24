@@ -63,7 +63,7 @@ Environment:
   TEX_TEMPLATES_CONFIG_HOME  Directory holding the global default-template.
   XDG_CONFIG_HOME            Standard configuration directory fallback.
 
-Pandoc and the selected template's TeX engine must already be installed.
+Pandoc, Python 3 and the selected template's TeX engine must already be installed.
 EOF
 }
 
@@ -200,6 +200,10 @@ project_defaults=$defaults_dir/$(basename "$project_defaults")
 # Each build starts with the project, selected template, and standard TeX paths.
 # The template's hook can add further directories when it needs them.
 TEXINPUTS=$project_dir:$TEX_TEMPLATE_HOME:
+for component in "$TEX_TEMPLATES_HOME"/components/*; do
+    [ -d "$component" ] || continue
+    TEXINPUTS=$component:$TEXINPUTS
+done
 export TEXINPUTS
 if [ -f "$TEX_TEMPLATE_HOME/environment.sh" ]; then
     . "$TEX_TEMPLATE_HOME/environment.sh"
@@ -215,6 +219,8 @@ log_path=$project_dir/build/pandoc-generation.log
 run_pandoc() {
     pandoc \
         --lua-filter="$include_filter" \
+        --lua-filter="$TEX_TEMPLATES_HOME/filters/components.lua" \
+        --filter="$TEX_TEMPLATES_HOME/filters/mermaid.py" \
         --defaults="$template_defaults" \
         --defaults="$project_defaults" \
         --template="$TEX_TEMPLATE_PATH" \

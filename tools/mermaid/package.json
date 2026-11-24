@@ -1,0 +1,12 @@
+{
+  "name": "tex-templates-mermaid",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Pinned Mermaid rendering tools for TeX Templates",
+  "dependencies": {
+    "@mermaid-js/mermaid-cli": "11.12.0",
+    "mermaid": "11.12.0",
+    "playwright": "1.56.1",
+    "puppeteer": "23.11.1"
+  }
+}

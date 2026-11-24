@@ -104,6 +104,16 @@ local function inline_text(inlines)
 end
 
 local function directives(block, source, chain)
+  local candidate, line_start = false, true
+  for _, inline in ipairs(block.content) do
+    if inline.t == 'SoftBreak' or inline.t == 'LineBreak' then
+      line_start = true
+    elseif line_start and inline.t ~= 'Space' then
+      candidate = candidate or (inline.t == 'Str' and inline.text == '!include')
+      line_start = false
+    end
+  end
+  if not candidate then return nil end
   local has_code = false
   block:walk {Code = function() has_code = true end}
   if has_code then return nil end
@@ -314,8 +324,25 @@ function Pandoc(document)
     local filter = {
       traverse = 'topdown', Para = expand_paragraph, Plain = expand_paragraph
     }
+    -- Carry the source directory for diagram assets in included Markdown.
     if rebase then
-      filter.Image = function(element) return rebase_resource(element, base) end
+      filter.CodeBlock = function(element)
+        if element.classes:includes('mermaid') then
+          element.attributes['data-mermaid-base'] = base
+        end
+        return element
+      end
+    end
+    -- Alt text and figure captions are descriptions, not source directives.
+    filter.Image = function(element)
+      if rebase then element = rebase_resource(element, base) end
+      return element, false
+    end
+    filter.Figure = function(element)
+      element.content = expand_blocks(element.content, base, current, rebase)
+      return element, false
+    end
+    if rebase then
       filter.Link = function(element) return rebase_resource(element, base) end
     end
     -- Walking blocks, rather than the document, leaves root metadata intact.

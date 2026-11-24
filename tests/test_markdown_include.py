@@ -180,6 +180,29 @@ class MarkdownIncludeTests(unittest.TestCase):
         self.assertEqual(text(nodes(document, "Strong")[0]), "prose")
         self.assertIn("This paragraph mentions !include absent.md.", text(document))
 
+    def test_empty_alt_images_and_other_empty_markup_are_not_directives(self):
+        for source in ("![](assets/image.png){width=80%}\n", "[](#anchor)\n", "[]{#anchor}\n"):
+            with self.subTest(source=source):
+                self.write("main.md", source)
+                self.document()
+
+    def test_an_include_looking_image_caption_is_still_an_image(self):
+        self.write("main.md", "![!include absent.md](assets/image.png)\n")
+        self.assertEqual(len(nodes(self.document(), "Image")), 1)
+
+    def test_formatted_include_filename_keeps_its_clear_error(self):
+        self.write("main.md", "!include *chapter*.md\n")
+        result = self.run_pandoc()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("filename contains Markdown formatting", result.stderr)
+
+    def test_included_mermaid_blocks_keep_their_asset_directory(self):
+        self.write("main.md", "!include chapters/chapter.md\n")
+        self.write("chapters/chapter.md", "```mermaid\nflowchart LR\nA-->B\n```\n")
+        block=nodes(self.document(), "CodeBlock")[0]
+        attributes=dict(block["c"][0][2])
+        self.assertEqual(Path(attributes["data-mermaid-base"]).resolve(), (self.project/"chapters").resolve())
+
     def test_missing_file_fails_with_a_useful_path(self):
         self.write("main.md", "!include missing/chapter.md\n")
         result = self.run_pandoc()
@@ -318,7 +341,8 @@ class MarkdownIncludeTests(unittest.TestCase):
         (library / "bin").mkdir()
         (library / "filters").mkdir()
         shutil.copy2(LAUNCHER, library / "bin" / "generate-pdf.sh")
-        shutil.copy2(FILTER, library / "filters" / "include.lua")
+        for name in ("include.lua", "components.lua", "mermaid.py"):
+            shutil.copy2(LIBRARY / "filters" / name, library / "filters" / name)
         (template / "template.tex").write_text("$body$\n", encoding="utf-8")
         (template / "defaults.yaml").write_text(
             "from: markdown\nto: latex\nstandalone: true\n", encoding="utf-8")

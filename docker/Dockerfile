@@ -20,6 +20,8 @@
 # The publishing workflow prepares library/ from a verified release archive.
 # Its Docker context contains only this directory and the Docker build files.
 ARG UBUNTU_IMAGE=ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
+ARG NODE_IMAGE=node:22-bookworm-slim@sha256:be979e5523c76fa4d5ca4ebd3099078f220aa47ec39c48ad5b5df9314debd6eb
+FROM ${NODE_IMAGE} AS node-runtime
 FROM ${UBUNTU_IMAGE}
 
 ARG TARGETARCH
@@ -59,7 +61,12 @@ RUN bash /tmp/install-texlive.sh "$TARGETARCH" "$TEXLIVE_REPOSITORY" \
         "$TEXLIVE_INSTALLER_SHA512" /tmp/tex-requirements.txt \
     && rm /tmp/install-texlive.sh /tmp/tex-requirements.txt
 
+COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
+COPY --from=node-runtime /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
+
 COPY library/ /opt/tex-templates/
+ENV TEX_TEMPLATES_MERMAID_HOME=/opt/tex-templates-mermaid
 ARG LIBRARY_VERSION
 ARG LIBRARY_COMMIT
 ARG LIBRARY_SHA256
@@ -88,6 +95,11 @@ for command in ("generate-pdf.sh", "template-list.sh", "template-use.sh"):
     if not (library / "bin" / command).is_file():
         raise SystemExit(f"The prepared library is missing {command}")
 PY
+
+RUN if [ -f /opt/tex-templates/tools/mermaid/setup.sh ]; then \
+        bash /opt/tex-templates/tools/mermaid/setup.sh; \
+    fi \
+    && rm -rf /root/.npm /var/lib/apt/lists/*
 
 RUN chmod -R a+rX /opt/tex-templates \
     && chmod a+rx /opt/tex-templates/bin/*.sh

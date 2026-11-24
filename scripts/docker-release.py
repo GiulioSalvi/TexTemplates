@@ -95,10 +95,16 @@ def verify_assets(directory: Path, version: str, commit: str) -> tuple[Path, lis
     present = {item.name for item in tree.iterdir()}
     # Existing published libraries remain usable; newer archives also contain
     # shared Pandoc filters consumed automatically by generate-pdf.sh.
-    if not allowed.issubset(present) or not present.issubset(allowed | {"filters"}):
+    if not allowed.issubset(present) or not present.issubset(allowed | {"filters", "components", "tools"}):
         raise release.ReleaseError("The library archive contains unexpected source material.")
     if "filters" in present and not (tree / "filters" / "include.lua").is_file():
         raise release.ReleaseError("The library archive is missing filters/include.lua.")
+    if "components" in present and not (tree / "components/boxes/tt-boxes.sty").is_file():
+        raise release.ReleaseError("The library archive is missing components/boxes/tt-boxes.sty.")
+    if (tree / "filters/mermaid.py").is_file():
+        for name in ("package.json", "package-lock.json", "config.json", "setup.sh"):
+            if not (tree / "tools/mermaid" / name).is_file():
+                raise release.ReleaseError(f"The library archive is missing tools/mermaid/{name}.")
     if {item.name for item in (tree / "templates").iterdir()} != {item["id"] for item in records}:
         raise release.ReleaseError("Installed templates do not match the release lock.")
     for record in records:

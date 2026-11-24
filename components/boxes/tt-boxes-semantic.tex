@@ -1,0 +1,205 @@
+% TeX Templates - Shared boxes
+% Copyright (C) 2026 Giulio Salvi
+% GNU GPL version 3 or any later version; without any warranty. See LICENSE.
+% SPDX-FileCopyrightText: 2026 Giulio Salvi
+% SPDX-License-Identifier: GPL-3.0-or-later
+
+% Keep box titles and counter tags on the same line.
+\newcommand{\boxtitle}[2]{#1\hspace{0.55em}#2}
+\newcommand{\boxcountertag}[1]{%
+  \hfill\nobreak\mbox{\normalfont #1}%
+}
+\newcommand{\boxtitlewithlabel}[3]{%
+  \boxtitle{#1}{#2}\boxcountertag{#3}%
+}
+\newcommand{\boxplainwithlabel}[2]{%
+  #1\boxcountertag{#2}%
+}
+\newcommand{\boxtitlewithname}[4]{%
+  \ifstrempty{#3}{%
+    \boxtitlewithlabel{#1}{#2}{#4}%
+  }{%
+    \boxtitlewithlabel{#1}{#2 of #3}{#4}%
+  }%
+}
+\newcommand{\boxtitleorfallback}[4]{%
+  \ifstrempty{#3}{%
+    \boxtitlewithlabel{#1}{#2}{#4}%
+  }{%
+    \boxtitlewithlabel{#1}{#3}{#4}%
+  }%
+}
+
+
+% Forward optional titles and options to box environments.
+\NewDocumentCommand{\beginbox}{m O{} g}{%
+  \ifstrempty{#2}{%
+    \IfNoValueTF{#3}{\begin{#1}}{\begin{#1}{#3}}%
+  }{%
+    \IfNoValueTF{#3}{\begin{#1}[#2]}{\begin{#1}[#2]{#3}}%
+  }%
+}
+\NewDocumentCommand{\endbox}{m}{\end{#1}}
+
+
+% Preserve the original warm palette, icons and breakable box geometry.
+\tcbset{
+  semanticbox/.style={
+    enhanced,breakable,
+    colback=boxbg,colframe=boxbg,boxrule=0pt,sharp corners,
+    left=8pt,right=8pt,top=6pt,bottom=6pt,
+    lefttitle=8pt,righttitle=8pt,toptitle=6pt,bottomtitle=6pt,
+    before skip=10pt,after skip=10pt,fonttitle=\bfseries,coltitle=black
+  }
+}
+
+% All semantic statements share one sequence, restarted by each chapter.
+% The label is established before opening tcolorbox so \label works in the body.
+\ifcsname c@chapter\endcsname
+  \newcounter{semanticboxctr}[chapter]
+  \renewcommand{\thesemanticboxctr}{\thechapter.\arabic{semanticboxctr}}
+  \providecommand{\theHsemanticboxctr}{\theHchapter.\arabic{semanticboxctr}}
+\else
+  \newcounter{semanticboxctr}[section]
+  \renewcommand{\thesemanticboxctr}{%
+    \ifnum\value{section}>0\relax\thesection.\fi\arabic{semanticboxctr}}
+  \providecommand{\theHsemanticboxctr}{\arabic{section}.\arabic{semanticboxctr}}
+\fi
+\NewDocumentCommand{\currentboxlabel}{}{(\thesemanticboxctr)}
+\NewDocumentCommand{\stepboxcounter}{m}{%
+  \crefalias{semanticboxctr}{#1}%
+  \refstepcounter{semanticboxctr}%
+}
+
+% Names and reference types follow the document language.
+\NewDocumentCommand{\propertyname}{}{Property}
+\NewDocumentCommand{\definitionname}{}{Definition}
+\NewDocumentCommand{\theoremname}{}{Theorem}
+\NewDocumentCommand{\axiomname}{}{Axiom}
+\NewDocumentCommand{\lemmaname}{}{Lemma}
+\NewDocumentCommand{\observationname}{}{Observation}
+\NewDocumentCommand{\tipname}{}{Tip}
+\NewDocumentCommand{\proofsectionname}{}{Proof}
+\NewDocumentCommand{\timeanalysisname}{}{Time Complexity Analysis}
+\NewDocumentCommand{\derivationname}{}{Derivation}
+\NewDocumentCommand{\boxofname}{}{of}
+\NewDocumentCommand{\englishboxnames}{}{%
+  \renewcommand{\propertyname}{Property}%
+  \renewcommand{\definitionname}{Definition}%
+  \renewcommand{\theoremname}{Theorem}%
+  \renewcommand{\axiomname}{Axiom}%
+  \renewcommand{\lemmaname}{Lemma}%
+  \renewcommand{\observationname}{Observation}%
+  \renewcommand{\tipname}{Tip}%
+  \renewcommand{\proofsectionname}{Proof}%
+  \renewcommand{\timeanalysisname}{Time Complexity Analysis}%
+  \renewcommand{\derivationname}{Derivation}%
+  \renewcommand{\boxofname}{of}%
+  \crefname{propertybox}{property}{properties}\Crefname{propertybox}{Property}{Properties}%
+  \crefname{definitionbox}{definition}{definitions}\Crefname{definitionbox}{Definition}{Definitions}%
+  \crefname{theorembox}{theorem}{theorems}\Crefname{theorembox}{Theorem}{Theorems}%
+  \crefname{axiombox}{axiom}{axioms}\Crefname{axiombox}{Axiom}{Axioms}%
+  \crefname{lemmabox}{lemma}{lemmas}\Crefname{lemmabox}{Lemma}{Lemmas}%
+  \crefname{observationbox}{observation}{observations}\Crefname{observationbox}{Observation}{Observations}%
+  \crefname{tipbox}{tip}{tips}\Crefname{tipbox}{Tip}{Tips}%
+}
+\NewDocumentCommand{\italianboxnames}{}{%
+  \renewcommand{\propertyname}{Proprietà}%
+  \renewcommand{\definitionname}{Definizione}%
+  \renewcommand{\theoremname}{Teorema}%
+  \renewcommand{\axiomname}{Assioma}%
+  \renewcommand{\lemmaname}{Lemma}%
+  \renewcommand{\observationname}{Osservazione}%
+  \renewcommand{\tipname}{Suggerimento}%
+  \renewcommand{\proofsectionname}{Dimostrazione}%
+  \renewcommand{\timeanalysisname}{Analisi della complessità temporale}%
+  \renewcommand{\derivationname}{Derivazione}%
+  \renewcommand{\boxofname}{di}%
+  \crefname{propertybox}{proprietà}{proprietà}\Crefname{propertybox}{Proprietà}{Proprietà}%
+  \crefname{definitionbox}{definizione}{definizioni}\Crefname{definitionbox}{Definizione}{Definizioni}%
+  \crefname{theorembox}{teorema}{teoremi}\Crefname{theorembox}{Teorema}{Teoremi}%
+  \crefname{axiombox}{assioma}{assiomi}\Crefname{axiombox}{Assioma}{Assiomi}%
+  \crefname{lemmabox}{lemma}{lemmi}\Crefname{lemmabox}{Lemma}{Lemmi}%
+  \crefname{observationbox}{osservazione}{osservazioni}\Crefname{observationbox}{Osservazione}{Osservazioni}%
+  \crefname{tipbox}{suggerimento}{suggerimenti}\Crefname{tipbox}{Suggerimento}{Suggerimenti}%
+}
+\ifcsname captionsenglish\endcsname
+  \addto\captionsenglish{\englishboxnames}
+\fi
+\ifcsname captionsitalian\endcsname
+  \addto\captionsitalian{\italianboxnames}
+\fi
+\AddToHook{begindocument/end}{%
+  \ifdefstring{\languagename}{italian}{\italianboxnames}{\englishboxnames}%
+}
+
+% The old {title} syntax remains accepted after [tcolorbox options].
+\NewDocumentEnvironment{propertybox}{O{} g}{%
+  \stepboxcounter{propertybox}%
+  \IfNoValueTF{#2}{\def\handoutsboxtitle{\propertyname}}{%
+    \ifstrempty{#2}{\def\handoutsboxtitle{\propertyname}}{\def\handoutsboxtitle{#2}}%
+  }%
+  \begin{tcolorbox}[semanticbox,borderline north={3pt}{0pt}{propcolor},
+    title={\boxtitlewithlabel{\textcolor{propcolor}{\faBalanceScale}}{\handoutsboxtitle}{\currentboxlabel}},#1]%
+}{\end{tcolorbox}}
+
+\NewDocumentEnvironment{definitionbox}{O{} g}{%
+  \stepboxcounter{definitionbox}%
+  \IfNoValueTF{#2}{\def\handoutsboxtitle{\definitionname}}{%
+    \ifstrempty{#2}{\def\handoutsboxtitle{\definitionname}}{\def\handoutsboxtitle{\definitionname\ \boxofname\ #2}}%
+  }%
+  \begin{tcolorbox}[semanticbox,borderline north={3pt}{0pt}{defcolor},
+    title={\boxtitlewithlabel{\textcolor{defcolor}{\faBook}}{\handoutsboxtitle}{\currentboxlabel}},#1]%
+}{\end{tcolorbox}}
+
+\NewDocumentEnvironment{theorembox}{O{} g}{%
+  \stepboxcounter{theorembox}%
+  \IfNoValueTF{#2}{\def\handoutsboxtitle{\theoremname}}{%
+    \ifstrempty{#2}{\def\handoutsboxtitle{\theoremname}}{\def\handoutsboxtitle{#2}}%
+  }%
+  \begin{tcolorbox}[semanticbox,borderline north={3pt}{0pt}{thmcolor},
+    title={\boxtitlewithlabel{\textcolor{thmcolor}{\faCog}}{\handoutsboxtitle}{\currentboxlabel}},#1]%
+}{\end{tcolorbox}}
+
+\NewDocumentEnvironment{axiombox}{O{} g}{%
+  \stepboxcounter{axiombox}%
+  \IfNoValueTF{#2}{\def\handoutsboxtitle{\axiomname}}{%
+    \ifstrempty{#2}{\def\handoutsboxtitle{\axiomname}}{\def\handoutsboxtitle{#2}}%
+  }%
+  \begin{tcolorbox}[semanticbox,borderline north={3pt}{0pt}{axiomcolor},
+    title={\boxtitlewithlabel{\textcolor{axiomcolor}{\faFile[regular]}}{\handoutsboxtitle}{\currentboxlabel}},#1]%
+}{\end{tcolorbox}}
+
+\NewDocumentEnvironment{lemmabox}{O{}}{%
+  \stepboxcounter{lemmabox}%
+  \begin{tcolorbox}[semanticbox,borderline north={3pt}{0pt}{lemcolor},
+    title={\boxtitlewithlabel{\textcolor{lemcolor}{\faProjectDiagram}}{\lemmaname}{\currentboxlabel}},#1]%
+}{\end{tcolorbox}}
+
+\NewDocumentEnvironment{observationbox}{O{}}{%
+  \stepboxcounter{observationbox}%
+  \begin{tcolorbox}[semanticbox,borderline north={3pt}{0pt}{obscolor},
+    title={\boxtitlewithlabel{\textcolor{obscolor}{\faEye}}{\observationname}{\currentboxlabel}},#1]%
+}{\end{tcolorbox}}
+
+\NewDocumentEnvironment{tipbox}{O{}}{%
+  \stepboxcounter{tipbox}%
+  \begin{tcolorbox}[semanticbox,borderline north={3pt}{0pt}{tipcolor},
+    title={\boxtitlewithlabel{\textcolor{tipcolor}{\faLightbulb[regular]}}{\tipname}{\currentboxlabel}},#1]%
+}{\end{tcolorbox}}
+
+\NewDocumentEnvironment{sidebarsection}{O{}}{%
+  \begin{tcolorbox}[enhanced,breakable,colback=white,boxrule=0pt,frame hidden,
+    borderline west={1.2pt}{0pt}{gray!70},arc=6pt,left=5pt,right=0pt,top=4pt,bottom=4pt,
+    before upper={\RaggedRight},#1]%
+}{\end{tcolorbox}}
+\NewDocumentEnvironment{proofsection}{O{}}{%
+  \par\smallskip\noindent\textbf{\proofsectionname:}\par
+  \begin{sidebarsection}[#1]%
+}{%
+  \par\noindent\hfill$\square$\end{sidebarsection}%
+}
+\NewDocumentEnvironment{timeanalysissection}{O{}}{%
+  \par\smallskip\noindent\textbf{\timeanalysisname:}\par
+  \begin{sidebarsection}[#1]%
+}{\end{sidebarsection}}

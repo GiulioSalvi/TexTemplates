@@ -1,0 +1,38 @@
+% TeX Templates - Shared boxes
+% Copyright (C) 2026 Giulio Salvi
+% GNU GPL version 3 or any later version; without any warranty. See LICENSE.
+% SPDX-FileCopyrightText: 2026 Giulio Salvi
+% SPDX-License-Identifier: GPL-3.0-or-later
+
+\NeedsTeXFormat{LaTeX2e}[2022-06-01]
+\ProvidesPackage{tt-boxes}[2026/11/24 Shared semantic and presentation boxes]
+\RequirePackage{xcolor,graphicx,adjustbox,tikz,etoolbox,ragged2e}
+\RequirePackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+\RequirePackage{fontawesome5}
+\RequirePackage{hyperref}
+\RequirePackage[nameinlink,capitalise,noabbrev]{cleveref}
+\providecommand{\square}{\mdlgwhtsquare}
+% Use a warm background for all semantic boxes.
+\providecolor{boxbg}{RGB}{239,235,201}
+
+% Assign one accent color to each box category.
+\providecolor{propcolor}{RGB}{0,102,204}    % blue
+\providecolor{defcolor}{RGB}{0,153,76}      % green
+\providecolor{thmcolor}{RGB}{204,0,0}       % red
+\providecolor{axiomcolor}{RGB}{120,80,20}   % bronze
+\providecolor{lemcolor}{RGB}{128,0,128}     % purple
+\providecolor{obscolor}{RGB}{230,140,0}     % orange
+\providecolor{tipcolor}{RGB}{0,150,150}     % teal
+
+
+\providecolor{BoxBorder}{HTML}{F4E1E4}
+\providecolor{BoxTitle}{HTML}{BE2930}
+% Old handouts releases already define their semantic environments.
+\ifcsname c@semanticboxctr\endcsname\else
+  \input{tt-boxes-semantic.tex}
+\fi
+\ifdefined\TransparentBox\else
+  \input{tt-boxes-transparent.tex}
+\fi
+\endinput

@@ -6,6 +6,9 @@ on:
     paths:
       - 'bin/**'
       - 'filters/**'
+      - 'components/**'
+      - 'tools/**'
+      - 'release-series'
       - 'templates/**'
       - 'scripts/**'
       - '.gitmodules'

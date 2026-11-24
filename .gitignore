@@ -4,3 +4,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+
+# Installed renderer dependencies and generated Python caches.
+**/node_modules/
+**/__pycache__/

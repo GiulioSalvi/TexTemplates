@@ -1,0 +1,67 @@
+% TeX Templates - Shared boxes
+% Copyright (C) 2026 Giulio Salvi
+% GNU GPL version 3 or any later version; without any warranty. See LICENSE.
+% SPDX-FileCopyrightText: 2026 Giulio Salvi
+% SPDX-License-Identifier: GPL-3.0-or-later
+
+\providecommand{\BoxHeadingFont}{%
+  \ifdefined\SlidesHeadingFont\SlidesHeadingFont\else\bfseries\fi}
+\providecommand{\BoxImageDiameter}{8mm}
+\providecommand{\BoxPadding}{4pt}
+\providecommand{\BoxTitlePadding}{3pt}
+\newsavebox{\BoxTitleMeasure}
+\newlength{\BoxTitleInset}
+
+\newcommand{\TransparentBox}[3][]{%
+  \begingroup\centering
+  \sbox{\BoxTitleMeasure}{{\BoxHeadingFont\Large\strut #2}}%
+  \setlength{\BoxTitleInset}{%
+    \dimexpr(\ht\BoxTitleMeasure+\dp\BoxTitleMeasure)/2+\BoxTitlePadding\relax}%
+  \begin{tikzpicture}[
+    box label/.style={
+      fill=BoxBorder,
+      text=BoxTitle,
+      rounded corners=8pt,
+      inner xsep=8pt,
+      inner ysep=\BoxTitlePadding,
+      font=\BoxHeadingFont\Large
+    }
+  ]
+    \node[
+      draw=BoxBorder,
+      line width=1pt,
+      rounded corners=12pt,
+      fill=white,
+      text=black,
+      align=center,
+      inner xsep=\BoxPadding,
+      inner ysep=\BoxPadding
+    ] (box) {%
+      \begin{minipage}{0.80\linewidth}
+        \centering
+        \vspace*{\BoxTitleInset}%
+        \strut #3\strut\par
+      \end{minipage}%
+    };
+
+    % Measure the title before drawing the image behind it.
+    \node[box label,opacity=0] (label) at (box.north) {\strut\phantom{#2}};
+
+    \if\relax\detokenize{#1}\relax
+    \else
+      \pgfmathsetlengthmacro{\BoxImageRadius}{0.5*\BoxImageDiameter}
+      \pgfmathsetlengthmacro{\BoxImageOffset}{0.4*\BoxImageDiameter}
+      \begin{scope}
+        \clip ([yshift=\BoxImageOffset]label.north) circle[radius=\BoxImageRadius];
+        \node[inner sep=0pt]
+          at ([yshift=\BoxImageOffset]label.north) {%
+            \adjustbox{min size={\BoxImageDiameter}{\BoxImageDiameter}}{%
+              \includegraphics[width=\BoxImageDiameter]{#1}%
+            }%
+          };
+      \end{scope}
+    \fi
+    \node[box label] at (label.center) {\strut #2};
+  \end{tikzpicture}
+  \par\endgroup
+}

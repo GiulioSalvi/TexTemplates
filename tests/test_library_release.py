@@ -336,6 +336,24 @@ class ReleaseTests(unittest.TestCase):
         result = release.assemble(self.parent, self.root / "preview", "0.0.0", preview=True)
         self.assertTrue(json.loads(Path(result["lock_path"]).read_text())["preview"])
 
+    def test_shared_components_and_renderer_tools_are_committed_runtime_inputs(self):
+        component = self.parent / "components" / "boxes"
+        component.mkdir(parents=True)
+        (component / "tt-boxes.sty").write_text("Shared boxes package\n")
+        (component / "requirements.txt").write_text("fontawesome5\n")
+        tools = self.parent / "tools" / "mermaid"
+        tools.mkdir(parents=True)
+        (tools / "package-lock.json").write_text("{}\n")
+        command(self.parent, "add", "components", "tools")
+        command(self.parent, "commit", "-m", "Add shared runtime components")
+        tree = self.root / "base-components"
+        release.base_tree(self.parent, tree)
+        self.assertTrue((tree / "components/boxes/tt-boxes.sty").is_file())
+        self.assertTrue((tree / "tools/mermaid/package-lock.json").is_file())
+        (tree / "templates").mkdir()
+        release.aggregate_requirements(tree)
+        self.assertIn("fontawesome5", (tree / "requirements.txt").read_text())
+
     def test_historical_ref_does_not_acquire_current_filters(self):
         command(self.parent, "rm", "-r", "filters")
         command(self.parent, "commit", "-m", "Historical library without shared filters")

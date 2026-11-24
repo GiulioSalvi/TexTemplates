@@ -1,0 +1,11 @@
+# Shared boxes: TeX Live / tlmgr package names.
+adjustbox
+cleveref
+etoolbox
+fontawesome5
+graphics
+hyperref
+pgf
+ragged2e
+tcolorbox
+xcolor

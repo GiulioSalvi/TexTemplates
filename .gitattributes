@@ -8,3 +8,7 @@
 /docker export-ignore
 /release-series export-ignore
 /templates export-ignore
+
+# Shared runtime components and renderer lock files are deliberately exported.
+/components/**/usage_example export-ignore
+/tools/**/node_modules export-ignore

@@ -176,6 +176,18 @@ class DockerReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(docker_release.release.ReleaseError, "must cover"):
             self.prepare()
 
+    def test_shared_component_requirements_are_verified_in_the_distribution(self):
+        component = self.tree / "components" / "boxes"
+        component.mkdir(parents=True)
+        (component / "tt-boxes.sty").write_text("Shared boxes\n")
+        (component / "requirements.txt").write_text("fontawesome5\n")
+        docker_release.release.aggregate_requirements(self.tree)
+        self.write_assets()
+        output = self.root / "component-context"
+        docker_release.prepare("0.1.0", output, PARENT, client=self.client, docker_dir=self.recipe)
+        self.assertTrue((output / "library/components/boxes/tt-boxes.sty").is_file())
+        self.assertIn("fontawesome5", (output / "library/requirements.txt").read_text())
+
     def test_new_runtime_archive_preserves_shared_filters(self):
         (self.tree / "filters").mkdir()
         (self.tree / "filters" / "include.lua").write_text("-- Shared Lua filter\n")
