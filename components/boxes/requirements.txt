@@ -1,11 +1,17 @@
 # Shared boxes: TeX Live / tlmgr package names.
+# Explicit tcolorbox skin dependencies for minimal/frozen TeX Live installations.
 adjustbox
 cleveref
+environ
 etoolbox
 fontawesome5
 graphics
 hyperref
+pdfcol
 pgf
 ragged2e
 tcolorbox
+tikzfill
+trimspaces
+varwidth
 xcolor
